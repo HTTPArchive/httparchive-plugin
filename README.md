@@ -6,32 +6,33 @@
 
 An official agent plugin conforming to the [Agent Plugins Specification (v1.0.0)](https://agent-plugins.org/) for querying the [HTTP Archive](https://httparchive.org) dataset in Google Cloud BigQuery.
 
-Equips AI agents with deep knowledge of HTTP Archive table structures, nested records, and custom metrics, while strictly enforcing cost optimization rules to eliminate multi-terabyte query scan waste.
+Instead of bundling static catalogs that become stale, this plugin uses **BigQuery and official HTTP Archive documentation as live sources of truth**.
 
 ---
 
 ## Capabilities
 
 ### 1. Model Context Protocol (MCP) Tools
-The plugin includes a stdio MCP server exposing 5 tools for BigQuery introspection and cost validation:
+The plugin includes a stdio MCP server exposing 5 tools for BigQuery live introspection and cost validation:
 
-| Tool | Description | Cost |
-|---|---|---|
-| `get_table_schema` | Returns column types, partition keys, clustering hierarchy, and domain hints for `crawl.pages`, `crawl.requests`, `sample_data.pages_10k`, etc. | $0.00 |
-| `list_custom_metrics` | Discovers and inspects the 20 `custom_metrics` categories (`a11y`, `seo`, `markup`, etc.), known JSON paths, and query patterns. | $0.00 |
-| `preview_table_rows` | Previews actual live rows using BigQuery's Tabledata API without executing queries or scanning data. | $0.00 |
-| `analyze_query_cost` | Performs a live BigQuery dry-run (`dryRun: true`) returning exact bytes processed, estimated USD cost, and applies HTTP Archive cost linting rules (partition checks, clustering hierarchy, `SELECT *` traps, `LIMIT` traps). | $0.00 |
-| `check_precomputed_reports` | Verifies whether requested metrics (CWV, page weight, adoption) are already available in pre-aggregated tables (`httparchive.reports.*`) or Tech Report APIs before running expensive raw crawl queries. | $0.00 |
+| Tool | Source of Truth | Description | Cost |
+|---|---|---|---|
+| `get_table_schema` | **Live BigQuery API + Docs** | Queries BigQuery table metadata directly for column types, partitioning (`date`), clustering hierarchy, and links to official documentation. | $0.00 |
+| `list_custom_metrics` | **Live BigQuery Schema & Data** | Introspects the live `custom_metrics` RECORD in BigQuery `crawl.pages`, and samples real JSON property keys via `sample_data.pages_10k` Tabledata API. | $0.00 |
+| `preview_table_rows` | **Live BigQuery Tabledata API** | Previews actual live rows at zero cost without executing query jobs or scanning bytes. | $0.00 |
+| `analyze_query_cost` | **Live BigQuery Dry-Run API** | Runs a live BigQuery dry-run (`dryRun: true`) returning exact bytes processed, estimated USD cost, and applies domain cost rules (partitioning, clustering order, `SELECT *` traps, `LIMIT` traps). | $0.00 |
+| `get_documentation` | **HTTP Archive Docs Source** | Dynamically fetches official documentation guides (`minimizing-costs`, `getting-started`, `release-cycle`), table reference docs (`pages`, `requests`), struct reference docs (`custom-metrics`, `technology`), and SQL function docs (`capo`, `get_origin`). | $0.00 |
 
 ### 2. Agent Skills
 Located under `skills/` adhering to the [Agent Skills specification](https://agentskills.io/):
 
 - **[`httparchive-table-schema`](skills/httparchive-table-schema/SKILL.md)**:
-  - Deep schema reference for `crawl.pages`, `crawl.requests`, `sample_data`, and `reports`.
-  - Nested unnesting patterns for `technologies` (`ARRAY<STRUCT>`) and `features` (`ARRAY<STRUCT>`).
+  - Guides agents to use `get_table_schema`, `list_custom_metrics`, and `get_documentation` to discover live structures rather than guessing.
+  - Unnesting patterns for `technologies` (`ARRAY<STRUCT>`) and `features` (`ARRAY<STRUCT>`).
   - Structured `RECORD` column storage for `custom_metrics` vs internal `JSON` path extraction.
   - Safe join patterns between pages and requests.
 - **[`httparchive-cost-optimization`](skills/httparchive-cost-optimization/SKILL.md)**:
+  - Grounded in the official [Minimizing Costs Guide](https://httparchive.org/docs/guides/minimizing-costs/).
   - The 5 core optimization rules (mandatory `date` partition, clustering hierarchy, column projection hygiene, the `LIMIT` trap).
   - Explains the BigQuery dry-run estimation limitation on clustered `rank` filters.
   - The 5-step safe prototyping progression (`preview_table_rows` → `sample_data.pages_10k` → `TABLESAMPLE` → clustered slice → production run).
@@ -48,26 +49,25 @@ httparchive-plugin/
 │   └── server.js                            # MCP server CLI executable
 ├── src/
 │   ├── index.js                             # McpServer initialization & tool registrations
-│   ├── bigquery.js                          # BigQuery client factory
-│   ├── data/
-│   │   ├── custom_metrics_catalog.js        # 20 custom metrics categories & query syntax
-│   │   └── reports_catalog.js               # Pre-computed reports & Tech Report mappings
+│   ├── bigquery.js                          # Live BigQuery client factory
+│   ├── docs.js                              # Dynamic HTTP Archive documentation loader
 │   └── tools/
-│       ├── get_table_schema.js
-│       ├── list_custom_metrics.js
-│       ├── preview_table_rows.js
-│       ├── analyze_query_cost.js            # Live dry-run & domain cost linter
-│       └── check_precomputed_reports.js
+│       ├── get_table_schema.js              # Live BQ metadata + docs loader
+│       ├── list_custom_metrics.js           # Live BQ custom_metrics schema & sampling
+│       ├── preview_table_rows.js            # Live BQ Tabledata preview ($0.00)
+│       ├── analyze_query_cost.js            # Live BQ dry-run & domain cost linter
+│       └── get_documentation.js             # Live docs reader
 ├── skills/
 │   ├── httparchive-table-schema/
-│   │   └── SKILL.md                         # Schema & unnesting guide
+│   │   └── SKILL.md                         # Live schema exploration guide
 │   └── httparchive-cost-optimization/
 │       └── SKILL.md                         # Cost minimization playbook
 ├── tests/
 │   ├── cost_linter.test.js                  # Unit tests for cost linting rules
 │   └── mcp_tools.test.js                    # Unit tests for MCP server tools
 ├── scripts/
-│   └── validate-spec.js                     # Validates plugin against agent-plugins.org schemas
+│   ├── validate-spec.js                     # Validates plugin against agent-plugins.org schemas
+│   └── schemas/1.0.0/                       # Canonical Agent Plugins JSON schemas
 └── .github/workflows/
     └── ci.yml                               # CI matrix (Node 20, 22, 24)
 ```

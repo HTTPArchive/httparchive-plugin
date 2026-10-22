@@ -10,8 +10,8 @@ const rootDir = path.resolve(__dirname, '..');
 const ajv = new Ajv2020({ allErrors: true });
 addFormats(ajv);
 
-const pluginSchemaPath = path.join(rootDir, 'schemas/1.0.0/plugin.schema.json');
-const mcpSchemaPath = path.join(rootDir, 'schemas/1.0.0/mcp.schema.json');
+const pluginSchemaPath = path.join(__dirname, 'schemas/1.0.0/plugin.schema.json');
+const mcpSchemaPath = path.join(__dirname, 'schemas/1.0.0/mcp.schema.json');
 
 const pluginSchema = JSON.parse(fs.readFileSync(pluginSchemaPath, 'utf-8'));
 const mcpSchema = JSON.parse(fs.readFileSync(mcpSchemaPath, 'utf-8'));

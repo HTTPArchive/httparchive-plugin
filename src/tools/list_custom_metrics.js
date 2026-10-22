@@ -1,53 +1,93 @@
-import { CUSTOM_METRICS_CATALOG } from '../data/custom_metrics_catalog.js';
+import { getBigQueryClient } from '../bigquery.js';
+import { fetchDoc } from '../docs.js';
 
 export const listCustomMetrics = async ({ category, search }) => {
+  const bq = getBigQueryClient();
+  const pagesTable = bq.dataset('crawl').table('pages');
+
+  // 1. Fetch live custom_metrics schema directly from BigQuery
+  const [metadata] = await pagesTable.getMetadata();
+  const customMetricsField = metadata.schema?.fields?.find(f => f.name === 'custom_metrics');
+
+  if (!customMetricsField || !customMetricsField.fields) {
+    throw new Error('custom_metrics field not found in crawl.pages schema');
+  }
+
+  const bqCategories = customMetricsField.fields.map(f => ({
+    name: f.name,
+    type: f.type,
+    description: f.description || ''
+  }));
+
+  // 2. Specific category inspection
   if (category) {
     const normalized = category.toLowerCase().trim();
-    const metric = CUSTOM_METRICS_CATALOG[normalized];
+    const found = bqCategories.find(c => c.name.toLowerCase() === normalized);
 
-    if (!metric) {
+    if (!found) {
       return {
-        error: `Category '${category}' not found. Available categories: ${Object.keys(CUSTOM_METRICS_CATALOG).join(', ')}`
+        error: `Category '${category}' not found in crawl.pages schema. Available categories in BigQuery: ${bqCategories.map(c => c.name).join(', ')}`
       };
     }
 
+    // Inspect live JSON structure by sampling 1 row from sample_data.pages_10k via zero-cost Tabledata API
+    let livePropertyKeys = [];
+    let sampleSnippet = null;
+    try {
+      const sampleTable = bq.dataset('sample_data').table('pages_10k');
+      const [rows] = await sampleTable.getRows({
+        maxResults: 1,
+        selectedFields: `custom_metrics.${found.name}`
+      });
+
+      if (rows.length > 0 && rows[0].custom_metrics?.[found.name]) {
+        const rawJson = rows[0].custom_metrics[found.name];
+        const parsed = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+        if (parsed && typeof parsed === 'object') {
+          livePropertyKeys = Object.keys(parsed);
+          sampleSnippet = JSON.stringify(parsed, null, 2).slice(0, 500) + '...';
+        }
+      }
+    } catch {
+      // Graceful fallback if sample_data is unreachable
+    }
+
     return {
-      category: metric.name,
-      type: metric.type,
-      description: metric.description,
-      exampleFields: metric.exampleFields,
-      queryExample: metric.queryExample,
-      costTip: metric.costTip
+      source: 'bigquery-crawl-pages-schema',
+      category: found.name,
+      type: found.type,
+      description: found.description,
+      liveSampleProperties: livePropertyKeys,
+      sampleDataSnippet: sampleSnippet,
+      queryPattern: `SELECT page, JSON_VALUE(custom_metrics.${found.name}, '$.property') FROM \`httparchive.crawl.pages\` WHERE date = 'YYYY-MM-01' AND client = 'mobile' AND is_root_page`,
+      costNotice: `Querying custom_metrics.${found.name} scans only that column in Capacitor storage. Never select the parent custom_metrics record.`
     };
   }
 
+  // 3. Search across BigQuery field descriptions
   if (search) {
     const query = search.toLowerCase().trim();
-    const matches = Object.values(CUSTOM_METRICS_CATALOG).filter(m =>
-      m.name.toLowerCase().includes(query) ||
-      m.description.toLowerCase().includes(query) ||
-      m.exampleFields.some(f => f.toLowerCase().includes(query))
+    const matches = bqCategories.filter(c =>
+      c.name.toLowerCase().includes(query) ||
+      c.description.toLowerCase().includes(query)
     );
 
     return {
+      source: 'bigquery-crawl-pages-schema',
       searchQuery: search,
       matchCount: matches.length,
-      categories: matches.map(m => ({
-        category: m.name,
-        description: m.description,
-        exampleFields: m.exampleFields,
-        costTip: m.costTip
-      }))
+      categories: matches
     };
   }
 
+  // 4. Return all categories directly from BigQuery
+  const docRef = await fetchDoc('custom-metrics');
+
   return {
-    description: 'HTTP Archive pages table custom_metrics RECORD contains 20 specific JSON sub-columns. Accessing a sub-column (e.g. custom_metrics.a11y) only scans that column, reducing scanned bytes significantly.',
-    totalCategories: Object.keys(CUSTOM_METRICS_CATALOG).length,
-    categories: Object.values(CUSTOM_METRICS_CATALOG).map(m => ({
-      category: m.name,
-      description: m.description,
-      costTip: m.costTip
-    }))
+    source: 'bigquery-crawl-pages-schema',
+    description: customMetricsField.description || 'Custom metrics from WebPageTest',
+    totalCategories: bqCategories.length,
+    documentationUrl: docRef.url || 'https://httparchive.org/docs/reference/structs/custom-metrics/',
+    categories: bqCategories
   };
 };

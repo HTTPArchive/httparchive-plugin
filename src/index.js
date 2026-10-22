@@ -4,7 +4,7 @@ import { getTableSchema } from './tools/get_table_schema.js';
 import { listCustomMetrics } from './tools/list_custom_metrics.js';
 import { previewTableRows } from './tools/preview_table_rows.js';
 import { analyzeQueryCost } from './tools/analyze_query_cost.js';
-import { checkPrecomputedReports } from './tools/check_precomputed_reports.js';
+import { getDocumentation } from './tools/get_documentation.js';
 
 export const createMcpServer = () => {
   const server = new McpServer({
@@ -14,9 +14,9 @@ export const createMcpServer = () => {
 
   server.tool(
     'get_table_schema',
-    'Get detailed schema, partitioning, clustering metadata, and query hints for HTTP Archive BigQuery tables (e.g. crawl.pages, crawl.requests, sample_data.pages_10k).',
+    'Get live schema, partitioning, clustering metadata, and official docs links directly from BigQuery for HTTP Archive tables (e.g. crawl.pages, crawl.requests, sample_data.pages_10k).',
     {
-      dataset: z.string().default('crawl').describe('Dataset name: "crawl", "sample_data", or "reports"'),
+      dataset: z.string().default('crawl').describe('Dataset name: "crawl", "sample_data", etc.'),
       table: z.string().default('pages').describe('Table name: "pages", "requests", "pages_10k", "requests_10k", etc.')
     },
     async ({ dataset, table }) => {
@@ -31,10 +31,10 @@ export const createMcpServer = () => {
 
   server.tool(
     'list_custom_metrics',
-    'List or search HTTP Archive custom_metrics categories (a11y, seo, markup, etc.), their internal JSON fields, and BigQuery query examples.',
+    'Introspect live custom_metrics categories from BigQuery crawl.pages schema, with live zero-cost JSON property sampling from sample_data.pages_10k.',
     {
-      category: z.string().optional().describe('Specific custom metrics category to inspect (e.g. "a11y", "seo", "markup", "performance")'),
-      search: z.string().optional().describe('Search keyword across all custom metrics descriptions and example fields')
+      category: z.string().optional().describe('Specific custom metrics category to inspect (e.g. "a11y", "seo", "markup", "performance", "privacy")'),
+      search: z.string().optional().describe('Search keyword across custom metrics field descriptions')
     },
     async ({ category, search }) => {
       try {
@@ -48,7 +48,7 @@ export const createMcpServer = () => {
 
   server.tool(
     'preview_table_rows',
-    'Preview actual live table rows at ZERO query cost using BigQuery Tabledata API (does not scan bytes or incur query fees).',
+    'Preview live table rows at ZERO query cost using BigQuery Tabledata API (does not scan bytes or execute queries).',
     {
       dataset: z.string().default('crawl').describe('Dataset name, e.g. "crawl" or "sample_data"'),
       table: z.string().default('pages').describe('Table name, e.g. "pages" or "requests"'),
@@ -67,7 +67,7 @@ export const createMcpServer = () => {
 
   server.tool(
     'analyze_query_cost',
-    'Run a live BigQuery dry-run to estimate query bytes processed, USD cost, and evaluate HTTP Archive domain cost optimization rules (partitioning, clustering order, SELECT * traps, LIMIT traps).',
+    'Run a live BigQuery dry-run to estimate query bytes processed, USD cost, and evaluate HTTP Archive cost optimization rules (partitioning, clustering order, SELECT * traps, LIMIT traps).',
     {
       query: z.string().describe('The SQL query to analyze and estimate')
     },
@@ -82,14 +82,14 @@ export const createMcpServer = () => {
   );
 
   server.tool(
-    'check_precomputed_reports',
-    'Check if a desired metric or web vitals breakdown is already available in pre-aggregated tables (httparchive.reports.*) or Tech Report APIs, avoiding expensive raw crawl queries.',
+    'get_documentation',
+    'Fetch official HTTP Archive documentation and guides (minimizing-costs, pages, requests, custom-metrics, technology, capo, etc.) directly from the docs source.',
     {
-      topic: z.string().optional().describe('Metric or topic to check (e.g. "cwv", "lcp", "inp", "page-weight", "requests", "adoption", "lighthouse")')
+      topic: z.string().optional().describe('Documentation topic or guide name (e.g. "minimizing-costs", "pages", "requests", "custom-metrics", "technology", "capo"). Leave empty to list all available topics.')
     },
     async ({ topic }) => {
       try {
-        const result = await checkPrecomputedReports({ topic });
+        const result = await getDocumentation({ topic });
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: 'text', text: JSON.stringify({ error: err.message }) }], isError: true };
