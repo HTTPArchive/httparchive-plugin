@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "httparchive",
+  "version": "1.0.0",
+  "description": "HTTP Archive agent plugin for table schema exploration and query cost optimization",
+  "author": {
+    "name": "HTTP Archive Team",
+    "url": "https://httparchive.org"
+  },
+  "homepage": "https://httparchive.org",
+  "repository": "https://github.com/httparchive/httparchive-plugin",
+  "license": "Apache-2.0",
+  "keywords": [
+    "httparchive",
+    "bigquery",
+    "cost-optimization",
+    "web-performance"
+  ]
+}

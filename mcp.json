@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "httparchive": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/bin/server.js"
+      ],
+      "env": {
+        "BIGQUERY_PROJECT": "httparchive",
+        "BIGQUERY_LOCATION": "US"
+      },
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}
