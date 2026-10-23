@@ -1,6 +1,6 @@
 {
   "name": "@httparchive/agent-plugin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "HTTP Archive agent plugin: cost-safe BigQuery queries over the crawl dataset and Tech Report metrics via MCP",
   "type": "module",
   "engines": {

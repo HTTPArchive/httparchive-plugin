@@ -69,21 +69,26 @@ test('Harness marketplaces: Claude Code and Codex install plugin.json from the r
   assert.ok(codexMarketplace.plugins.some(p => p.name === name && p.source?.path === './'));
 });
 
-test('Official Documentation: every docs path referenced by skills resolves', async (t) => {
-  const base = 'https://raw.githubusercontent.com/HTTPArchive/httparchive.org/main/src/content/docs/docs/';
-  const skill = fs.readFileSync(path.join(rootDir, 'skills/httparchive-docs-and-metrics/SKILL.md'), 'utf-8');
-  const paths = [...skill.matchAll(/`((?:guides|reference)\/[\w/-]+\.mdx?)`/g)].map(m => m[1]);
-  assert.ok(paths.length > 0, 'expected doc paths in the docs skill');
+test('Official Documentation: every httparchive.org URL referenced by skills resolves', async (t) => {
+  const skillsDir = path.join(rootDir, 'skills');
+  const urls = new Set();
+  for (const skill of fs.readdirSync(skillsDir)) {
+    const content = fs.readFileSync(path.join(skillsDir, skill, 'SKILL.md'), 'utf-8');
+    for (const [url] of content.matchAll(/https:\/\/httparchive\.org\/[\w/.-]*[\w/]/g)) urls.add(url);
+  }
+  assert.ok(urls.size > 0, 'expected httparchive.org URLs in the skills');
 
   try {
-    await fetch(base, { method: 'HEAD' });
+    await fetch('https://httparchive.org/', { method: 'HEAD' });
   } catch (err) {
     t.skip(`offline: ${err.message}`);
     return;
   }
 
-  for (const rel of paths) {
-    const res = await fetch(base + rel, { method: 'HEAD' });
-    assert.ok(res.ok, `${rel} returned ${res.status}`);
+  for (const url of urls) {
+    let res = await fetch(url, { method: 'HEAD' });
+    // The skill tells agents to fall back to the HTML page when a `.md` URL 404s.
+    if (res.status === 404 && url.endsWith('.md')) res = await fetch(url.slice(0, -3), { method: 'HEAD' });
+    assert.ok(res.ok, `${url} returned ${res.status}`);
   }
 });

@@ -1,6 +1,6 @@
 ---
 name: httparchive-docs-and-metrics
-description: Retrieve official HTTP Archive documentation and introspect `custom_metrics` JSON sub-columns in BigQuery. Use when the user asks what an HTTP Archive table, field, custom metric, struct or UDF means, needs the crawl release schedule, or wants to know which JSON keys exist in `crawl.pages.custom_metrics`. Treats live INFORMATION_SCHEMA and the httparchive.org docs on GitHub as the sources of truth.
+description: Retrieve official HTTP Archive documentation and introspect `custom_metrics` JSON sub-columns in BigQuery. Use when the user asks what an HTTP Archive table, field, custom metric, struct or UDF means, needs the crawl release schedule, or wants to know which JSON keys exist in `crawl.pages.custom_metrics`. Treats live INFORMATION_SCHEMA and the docs at httparchive.org/docs as the sources of truth.
 ---
 
 # HTTP Archive Documentation & Custom Metrics
@@ -17,42 +17,37 @@ If the question is about a technology's adoption, Core Web Vitals, Lighthouse sc
 
 ## 1. Official Documentation Lookup
 
-Official HTTP Archive documentation is maintained in markdown within the [`HTTPArchive/httparchive.org`](https://github.com/HTTPArchive/httparchive.org) repository.
+Official HTTP Archive documentation is published at [httparchive.org/docs](https://httparchive.org/docs).
 
-### Raw Documentation Base URL
+### How to Fetch a Page
+Append `.md` to any docs URL (for example `https://httparchive.org/docs/guides/minimizing-costs.md`) to get the page as clean Markdown, and fetch that with your built-in web fetch tool. If the `.md` URL returns 404, fetch the HTML page instead; the fetch tool converts it to readable text. If you have no web fetch tool, use `curl -sL "<url>"` (on Windows use `curl.exe`, which ships with Windows 10 and later; in Windows PowerShell 5.1, plain `curl` is an alias for `Invoke-WebRequest`).
+
+### Key Pages
+
+| Topic | URL | Purpose |
+|---|---|---|
+| Minimizing costs | https://httparchive.org/docs/guides/minimizing-costs | Partition pruning, clustering, and prototyping with `rank`, `TABLESAMPLE` and `sample_data`. |
+| Getting started | https://httparchive.org/docs/guides/getting-started | Getting started querying HTTP Archive in BigQuery. |
+| Guided tour | https://httparchive.org/docs/guides/guided-tour | Walkthrough of the datasets and example queries. |
+| Release cycle | https://httparchive.org/docs/guides/release-cycle | Monthly crawl schedule and dataset release timelines. |
+| `pages` table | https://httparchive.org/docs/reference/tables/pages | Full field descriptions for `crawl.pages`. |
+| `requests` table | https://httparchive.org/docs/reference/tables/requests | Field descriptions and MIME types for `crawl.requests`. |
+| `custom_metrics` struct | https://httparchive.org/docs/reference/structs/custom-metrics | Overview of custom metric categories and extraction. |
+| `technologies` struct | https://httparchive.org/docs/reference/structs/technology | Schema of the Wappalyzer technology detections array. |
+| `features` struct | https://httparchive.org/docs/reference/structs/feature | Schema of the Blink runtime feature detections array. |
+| Header struct | https://httparchive.org/docs/reference/structs/header | Schema of request and response header arrays. |
+| JSON blobs | https://httparchive.org/docs/reference/blobs/lighthouse (also `page-payload`, `page-summary`, `page-metadata`, `request-payload`, `request-summary`) | Structure of the large JSON columns. |
+| `capo` UDF | https://httparchive.org/docs/reference/functions/capo | Head element ordering. |
+| `get_origin` UDF | https://httparchive.org/docs/reference/functions/get_origin | Origin extraction. |
+
+### Finding Other Pages
+Pages are added and moved over time. For the current list, fetch the sitemap and keep the `/docs/` URLs:
+
 ```text
-https://raw.githubusercontent.com/HTTPArchive/httparchive.org/main/src/content/docs/docs/
+https://httparchive.org/sitemap.xml
 ```
 
-### Key Topics & File Paths
-
-| Topic | Category | Relative Path | Purpose |
-|---|---|---|---|
-| `minimizing-costs` | Guide | `guides/minimizing-costs.md` | Authoritative rules for partition pruning, clustering, and prototyping ladders. |
-| `getting-started` | Guide | `guides/getting-started.mdx` | Getting started querying HTTP Archive in BigQuery. |
-| `guided-tour` | Guide | `guides/guided-tour.mdx` | Walkthrough of the datasets and example queries. |
-| `release-cycle` | Guide | `guides/release-cycle.mdx` | Monthly crawl schedule and dataset release timelines. |
-| `pages` | Table Ref | `reference/tables/pages.mdx` | Full field descriptions for `crawl.pages`. |
-| `requests` | Table Ref | `reference/tables/requests.mdx` | Field descriptions and MIME types for `crawl.requests`. |
-| `custom-metrics` | Struct Ref | `reference/structs/custom-metrics.mdx` | Overview of custom metric categories and extraction. |
-| `technology` | Struct Ref | `reference/structs/technology.mdx` | Schema of Wappalyzer technology detections array. |
-| `feature` | Struct Ref | `reference/structs/feature.mdx` | Schema of Blink runtime feature detections array. |
-| `header` | Struct Ref | `reference/structs/header.mdx` | Schema of request/response header arrays. |
-| `blobs` | Blob Ref | `reference/blobs/{lighthouse,page-payload,page-summary,page-metadata,request-payload,request-summary}.mdx` | Structure of the large JSON columns. |
-| `capo` | Function Ref | `reference/functions/capo.mdx` | Usage of the CAPO UDF for head element ordering. |
-| `get_origin` | Function Ref | `reference/functions/get_origin.mdx` | Origin extraction function reference. |
-
-Docs move occasionally. If a path returns 404, list the current tree:
-```bash
-gh api 'repos/HTTPArchive/httparchive.org/git/trees/main?recursive=1' \
-  --jq '.tree[].path | select(startswith("src/content/docs/docs/") and (endswith(".md") or endswith(".mdx")))'
-```
-
-### CLI Retrieval Pattern
-Fetch any document directly into your agent context using `curl`:
-```bash
-curl -sL "https://raw.githubusercontent.com/HTTPArchive/httparchive.org/main/src/content/docs/docs/guides/minimizing-costs.md"
-```
+To search across all docs at once, fetch `https://httparchive.org/llms-small.txt`, a plain-text dump of the whole documentation. It is large, so prefer individual pages when you know which one you need.
 
 ---
 

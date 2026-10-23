@@ -12,7 +12,7 @@ An official, CLI-first agent plugin conforming to the [Agent Plugins Specificati
 
 The plugin combines two kinds of access, each where it fits best:
 
-- **Skills for the raw crawl.** Questions that need `crawl.pages` or `crawl.requests` are open-ended, so the skills teach the agent to use native CLIs (`bq`, `curl`, `jq`) against live `INFORMATION_SCHEMA` and the official docs instead of fixed tool signatures. Skills load only when relevant.
+- **Skills for the raw crawl.** Questions that need `crawl.pages` or `crawl.requests` are open-ended, so the skills teach the agent to use the `bq` CLI against live `INFORMATION_SCHEMA`, and to read the official docs at [httparchive.org/docs](https://httparchive.org/docs), instead of fixed tool signatures. Skills load only when relevant.
 - **MCP for the Tech Report.** Technology adoption, Core Web Vitals, Lighthouse and page-weight trends are already aggregated by the [Tech Report](https://httparchive.org/reports/techreport/landing). The remote MCP server at `https://cdn.httparchive.org/mcp` answers those questions directly, with no BigQuery project or query cost. It needs no authentication and nothing runs locally.
 
 ### MCP tools
@@ -33,10 +33,7 @@ The plugin combines two kinds of access, each where it fits best:
 ### 1. [`httparchive-docs-and-metrics`](skills/httparchive-docs-and-metrics/SKILL.md)
 Retrieval guide for official HTTP Archive documentation and live introspection of `custom_metrics` JSON sub-columns in BigQuery.
 
-- **Live Documentation Fetching**: Instructions and paths to read authoritative guides (`minimizing-costs.md`, `getting-started.mdx`, `release-cycle.mdx`), table references (`pages.mdx`, `requests.mdx`), and UDFs (`capo.mdx`, `get_origin.mdx`) directly from GitHub:
-  ```bash
-  curl -sL "https://raw.githubusercontent.com/HTTPArchive/httparchive.org/main/src/content/docs/docs/guides/minimizing-costs.md"
-  ```
+- **Live Documentation Fetching**: URLs of the authoritative guides, table references and UDF pages on [httparchive.org/docs](https://httparchive.org/docs), fetched with the agent's web-fetch tool. New pages are found through `https://httparchive.org/sitemap.xml`.
 - **Live `custom_metrics` Discovery (10 MB minimum)**: Discover all active categories from BigQuery's metadata catalog:
   ```bash
   bq query --use_legacy_sql=false --format=prettyjson \
@@ -127,7 +124,7 @@ codex plugin add httparchive@httparchive
 
 Copy or symlink the folders under `skills/` into the harness's skills directory (for example `~/.agents/skills/`), and add the MCP server `https://cdn.httparchive.org/mcp` (Streamable HTTP, no auth) in the harness's MCP settings.
 
-The skills shell out to `bq`, `curl`, and `gh`, so the Google Cloud SDK must be installed and authenticated against a project with BigQuery billing enabled. The MCP tools work without it.
+The BigQuery skills run the `bq` CLI, so the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) must be installed and authenticated against a project with BigQuery billing enabled. Docs pages are read with the agent's built-in web fetch, falling back to `curl` (`curl.exe` on Windows). The MCP tools need none of this.
 
 Claude Code reads `.mcp.json` and Codex reads `mcp.json`, and neither accepts a custom path in the root `plugin.json`, so the two files must stay identical. Edit `mcp.json`, then run `cp mcp.json .mcp.json`; a test fails if they differ.
 
