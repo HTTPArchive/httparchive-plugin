@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "httparchive",
   "version": "1.0.0",
-  "description": "HTTP Archive agent plugin for table schema exploration and query cost optimization",
+  "description": "HTTP Archive agent plugin: cost-safe BigQuery queries over the crawl dataset and Tech Report metrics via MCP",
   "author": {
     "name": "HTTP Archive Team",
     "url": "https://httparchive.org"

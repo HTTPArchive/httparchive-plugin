@@ -4,18 +4,27 @@
 [![Agent Plugins](https://img.shields.io/badge/Agent_Plugins-v1.0.0-blue.svg)](https://agent-plugins.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-An official, CLI-first agent plugin conforming to the [Agent Plugins Specification (v1.0.0)](https://agent-plugins.org/) for querying the [HTTP Archive](https://httparchive.org) dataset in Google Cloud BigQuery.
+An official, CLI-first agent plugin conforming to the [Agent Plugins Specification (v1.0.0)](https://agent-plugins.org/) for working with [HTTP Archive](https://httparchive.org) data: cost-safe BigQuery queries over the raw crawl, plus the pre-aggregated [Tech Report](https://httparchive.org/reports/techreport/landing) through a remote MCP server.
 
 ---
 
-## Why Pure Skills?
+## Skills and MCP
 
-Instead of running a local MCP server or forcing a remote MCP dependency that incurs continuous schema token bloat and maintenance overhead, this plugin provides **two high-leverage agent skills**:
+The plugin combines two kinds of access, each where it fits best:
 
-1. **Zero System Prompt Bloat**: MCP tools inject JSON Schemas into the agent context on *every single interaction*. Skills are loaded on demand only when relevant to the task.
-2. **CLI-First Flexibility**: AI agents can run native commands (`bq`, `curl`, `jq`), pipe outputs, and inspect specific properties without being locked into rigid tool signatures.
-3. **Always Up to Date**: Agents query BigQuery's live `INFORMATION_SCHEMA` and fetch official documentation directly from GitHub, ensuring schemas and metrics never get stale.
-4. **Zero Maintenance & Downtime**: No servers, no local background processes, and no external runtime dependencies.
+- **Skills for the raw crawl.** Questions that need `crawl.pages` or `crawl.requests` are open-ended, so the skills teach the agent to use native CLIs (`bq`, `curl`, `jq`) against live `INFORMATION_SCHEMA` and the official docs instead of fixed tool signatures. Skills load only when relevant.
+- **MCP for the Tech Report.** Technology adoption, Core Web Vitals, Lighthouse and page-weight trends are already aggregated by the [Tech Report](https://httparchive.org/reports/techreport/landing). The remote MCP server at `https://cdn.httparchive.org/mcp` answers those questions directly, with no BigQuery project or query cost. It needs no authentication and nothing runs locally.
+
+### MCP tools
+
+| Tool | Returns |
+|---|---|
+| `search_technologies`, `list_categories`, `list_versions` | Technologies, categories and versions tracked by the Tech Report |
+| `list_ranks`, `list_geos` | Rank segments and geographies available as filters |
+| `get_adoption_metrics` | Share of sites using a technology over time |
+| `get_cwv_metrics`, `get_cwv_distribution`, `get_geo_breakdown` | Core Web Vitals pass rates, histograms and per-country breakdowns |
+| `get_lighthouse_metrics`, `get_audits_metrics` | Lighthouse category scores and audit results |
+| `get_page_weight_metrics` | Page, JavaScript and CSS weight |
 
 ---
 
@@ -24,11 +33,11 @@ Instead of running a local MCP server or forcing a remote MCP dependency that in
 ### 1. [`httparchive-docs-and-metrics`](skills/httparchive-docs-and-metrics/SKILL.md)
 Retrieval guide for official HTTP Archive documentation and live introspection of `custom_metrics` JSON sub-columns in BigQuery.
 
-- **Live Documentation Fetching**: Instructions and paths to read authoritative guides (`minimizing-costs.md`, `getting-started.md`, `release-cycle.md`), table references (`pages.md`, `requests.md`), and UDFs (`capo.md`, `get_origin.md`) directly from GitHub:
+- **Live Documentation Fetching**: Instructions and paths to read authoritative guides (`minimizing-costs.md`, `getting-started.mdx`, `release-cycle.mdx`), table references (`pages.mdx`, `requests.mdx`), and UDFs (`capo.mdx`, `get_origin.mdx`) directly from GitHub:
   ```bash
   curl -sL "https://raw.githubusercontent.com/HTTPArchive/httparchive.org/main/src/content/docs/docs/guides/minimizing-costs.md"
   ```
-- **Live `custom_metrics` Discovery ($0.00)**: Discover all active categories from BigQuery's metadata catalog:
+- **Live `custom_metrics` Discovery (10 MB minimum)**: Discover all active categories from BigQuery's metadata catalog:
   ```bash
   bq query --use_legacy_sql=false --format=prettyjson \
   "SELECT field_path, data_type 
@@ -36,7 +45,7 @@ Retrieval guide for official HTTP Archive documentation and live introspection o
   WHERE table_name = 'pages' AND column_name = 'custom_metrics'"
   ```
 - **Key Sampling from `sample_data`**: Sample real JSON property keys via `JSON_KEYS()` on `sample_data.pages_10k`.
-- **Capacitor Storage Rules**: Why dot-notation (`custom_metrics.a11y`) only scans ~10 MB, while selecting root `custom_metrics` scans >350 MB.
+- **Capacitor Storage Rules**: Why dot-notation (`custom_metrics.a11y`) reads one JSON sub-column, while selecting root `custom_metrics` reads all of them.
 
 ---
 
@@ -58,11 +67,11 @@ Execution playbook for inspecting table schemas, previewing table data at $0.00 
 - **The 5 Core Optimization Rules**:
   1. Mandatory `date` partition pruning (`WHERE date = 'YYYY-MM-01'`).
   2. Follow clustering order left-to-right (`client` → `is_root_page` → `rank` → `page`).
-  3. **The Dry-Run Estimation Trap on `rank`**: Explains why dry-run estimates for `rank <= 1000` overestimate actual scan costs, and how to safely prototype on `sample_data.pages_10k` or `TABLESAMPLE`.
+  3. **Trust the dry run, including `rank` filters**: estimates now reflect cluster pruning on `rank`, unlike older guidance.
   4. Projection hygiene (no `SELECT *`, dot-notate `custom_metrics`).
   5. Safe joins between `crawl.pages` and `crawl.requests` (repeating partition and clustering filters on both sides).
-- **The 5-Step Safe Prototyping Ladder**:
-  `bq head` ($0.00) → `sample_data.pages_10k` (<100 MB) → `TABLESAMPLE SYSTEM (0.01 PERCENT)` → Clustered slice (`rank <= 1000`) → Dry-run before production run.
+- **The Safe Prototyping Ladder** (dry-run at every step):
+  `bq head` ($0.00) → `sample_data` (project columns) → Clustered slice (`rank <= 1000`, widened step by step) → Full run.
 
 ---
 
@@ -70,7 +79,13 @@ Execution playbook for inspecting table schemas, previewing table data at $0.00 
 
 ```text
 httparchive-plugin/
-├── plugin.json                              # Agent Plugins v1.0.0 root manifest
+├── plugin.json                              # Agent Plugins v1.0.0 manifest, read by Claude Code and Codex
+├── mcp.json                                 # Tech Report MCP server (read by Codex)
+├── .mcp.json                                # Identical copy (read by Claude Code)
+├── .claude-plugin/
+│   └── marketplace.json                     # Claude Code marketplace (this repo)
+├── .agents/plugins/
+│   └── marketplace.json                     # Codex marketplace (this repo)
 ├── skills/
 │   ├── httparchive-docs-and-metrics/
 │   │   └── SKILL.md                         # Documentation & custom metrics skill
@@ -80,6 +95,7 @@ httparchive-plugin/
 │   └── plugin.test.js                       # Specification & skill verification tests
 ├── scripts/
 │   ├── validate-spec.js                     # Validates plugin against agent-plugins.org schemas
+│   ├── verify-install.sh                    # Installs into a clean Claude Code or Codex home and checks it
 │   └── schemas/1.0.0/                       # Canonical Agent Plugins JSON schemas
 └── .github/workflows/
     └── ci.yml                               # GitHub Actions CI workflow
@@ -89,13 +105,31 @@ httparchive-plugin/
 
 ## Installation & Usage
 
-Add the plugin to your agent's skills or plugins discovery directory:
+The repository is its own marketplace for both Claude Code and Codex. Both read the root `plugin.json`, so it is the only manifest; don't add `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`, since each harness would prefer a different one.
+
+### Claude Code
 
 ```bash
-git clone https://github.com/httparchive/httparchive-plugin.git
+claude plugin marketplace add httparchive/httparchive-plugin
+claude plugin install httparchive@httparchive
 ```
 
-In any Agent Plugins v1.0.0 compatible harness (such as Antigravity, Cursor, Claude Code, or Jules), the skills will be automatically discovered and activated when exploring HTTP Archive tables or writing queries.
+Or, inside a session: `/plugin marketplace add httparchive/httparchive-plugin`, then `/plugin install httparchive@httparchive`.
+
+### Codex
+
+```bash
+codex plugin marketplace add httparchive/httparchive-plugin
+codex plugin add httparchive@httparchive
+```
+
+### Other Agent Skills harnesses
+
+Copy or symlink the folders under `skills/` into the harness's skills directory (for example `~/.agents/skills/`), and add the MCP server `https://cdn.httparchive.org/mcp` (Streamable HTTP, no auth) in the harness's MCP settings.
+
+The skills shell out to `bq`, `curl`, and `gh`, so the Google Cloud SDK must be installed and authenticated against a project with BigQuery billing enabled. The MCP tools work without it.
+
+Claude Code reads `.mcp.json` and Codex reads `mcp.json`, and neither accepts a custom path in the root `plugin.json`, so the two files must stay identical. Edit `mcp.json`, then run `cp mcp.json .mcp.json`; a test fails if they differ.
 
 ---
 
@@ -113,6 +147,11 @@ npm run validate:spec
 
 # Run linter
 npm run lint
+
+# Install into a clean Claude Code or Codex home and check the result
+# (needs the claude / codex CLI and jq; no login required)
+scripts/verify-install.sh claude
+scripts/verify-install.sh codex
 ```
 
 ---

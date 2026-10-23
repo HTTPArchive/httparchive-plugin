@@ -1,0 +1,15 @@
+{
+  "name": "httparchive",
+  "description": "HTTP Archive plugins for Claude Code",
+  "owner": {
+    "name": "HTTP Archive Team",
+    "url": "https://httparchive.org"
+  },
+  "plugins": [
+    {
+      "name": "httparchive",
+      "source": "./",
+      "description": "HTTP Archive skills for cost-safe BigQuery queries, plus the Tech Report MCP server"
+    }
+  ]
+}

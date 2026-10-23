@@ -21,9 +21,17 @@ test('Plugin Manifest (plugin.json): conforms to agent-plugins.org v1.0.0', () =
   assert.ok(plugin.keywords.includes('skills'));
 });
 
-test('Plugin Architecture: pure skills configuration without MCP token bloat', () => {
-  const mcpPath = path.join(rootDir, 'mcp.json');
-  assert.equal(fs.existsSync(mcpPath), false, 'mcp.json should not exist in pure skills plugin');
+test('MCP: Tech Report server is declared identically for Codex and Claude Code', () => {
+  // Codex reads mcp.json (Agent Plugins spec) and Claude Code reads .mcp.json;
+  // neither honors a custom path in the root plugin.json, and a symlink breaks
+  // on Windows checkouts, so .mcp.json is a plain copy.
+  const codex = fs.readFileSync(path.join(rootDir, 'mcp.json'), 'utf-8');
+  const claude = fs.readFileSync(path.join(rootDir, '.mcp.json'), 'utf-8');
+  assert.equal(claude, codex, '.mcp.json must be an exact copy of mcp.json');
+
+  const { mcpServers } = JSON.parse(codex);
+  assert.equal(mcpServers.httparchive?.type, 'streamable-http');
+  assert.equal(mcpServers.httparchive?.url, 'https://cdn.httparchive.org/mcp');
 });
 
 test('Skills: both docs-and-metrics and query-optimizer skills are defined with valid frontmatter', () => {
@@ -45,15 +53,37 @@ test('Skills: both docs-and-metrics and query-optimizer skills are defined with 
   }
 });
 
-test('Official Documentation: GitHub raw documentation source is accessible', async () => {
+test('Harness marketplaces: Claude Code and Codex install plugin.json from the repo root', () => {
+  const read = (rel) => JSON.parse(fs.readFileSync(path.join(rootDir, rel), 'utf-8'));
+  const { name } = read('plugin.json');
+
+  // Both harnesses read the root plugin.json, but a per-harness manifest takes
+  // precedence in Claude Code and loses to the root one in Codex. Keep one.
+  for (const rel of ['.claude-plugin/plugin.json', '.codex-plugin/plugin.json']) {
+    assert.equal(fs.existsSync(path.join(rootDir, rel)), false, `${rel} would shadow or drift from plugin.json`);
+  }
+
+  const claudeMarketplace = read('.claude-plugin/marketplace.json');
+  const codexMarketplace = read('.agents/plugins/marketplace.json');
+  assert.ok(claudeMarketplace.plugins.some(p => p.name === name && p.source === './'));
+  assert.ok(codexMarketplace.plugins.some(p => p.name === name && p.source?.path === './'));
+});
+
+test('Official Documentation: every docs path referenced by skills resolves', async (t) => {
+  const base = 'https://raw.githubusercontent.com/HTTPArchive/httparchive.org/main/src/content/docs/docs/';
+  const skill = fs.readFileSync(path.join(rootDir, 'skills/httparchive-docs-and-metrics/SKILL.md'), 'utf-8');
+  const paths = [...skill.matchAll(/`((?:guides|reference)\/[\w/-]+\.mdx?)`/g)].map(m => m[1]);
+  assert.ok(paths.length > 0, 'expected doc paths in the docs skill');
+
   try {
-    const res = await fetch(
-      'https://raw.githubusercontent.com/HTTPArchive/httparchive.org/main/src/content/docs/docs/guides/minimizing-costs.md'
-    );
-    assert.ok(res.ok, 'Documentation endpoint should return 200 OK');
-    const text = await res.text();
-    assert.ok(text.includes('Minimizing query costs') || text.includes('TABLESAMPLE'));
+    await fetch(base, { method: 'HEAD' });
   } catch (err) {
-    console.warn('Network check skipped or offline:', err.message);
+    t.skip(`offline: ${err.message}`);
+    return;
+  }
+
+  for (const rel of paths) {
+    const res = await fetch(base + rel, { method: 'HEAD' });
+    assert.ok(res.ok, `${rel} returned ${res.status}`);
   }
 });

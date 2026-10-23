@@ -1,7 +1,7 @@
 {
   "name": "@httparchive/agent-plugin",
   "version": "1.0.0",
-  "description": "HTTP Archive agent plugin for table schema exploration and query cost optimization via agent skills",
+  "description": "HTTP Archive agent plugin: cost-safe BigQuery queries over the crawl dataset and Tech Report metrics via MCP",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
