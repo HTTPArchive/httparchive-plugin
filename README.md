@@ -6,14 +6,27 @@
 
 An official agent plugin conforming to the [Agent Plugins Specification (v1.0.0)](https://agent-plugins.org/) for querying the [HTTP Archive](https://httparchive.org) dataset in Google Cloud BigQuery.
 
-Instead of bundling static catalogs that become stale, this plugin uses **BigQuery and official HTTP Archive documentation as live sources of truth**.
+Instead of bundling local scripts or static catalogs that become outdated quickly, this plugin connects to HTTP Archive's production **remote Streamable HTTP MCP server** (`https://cdn.httparchive.org/mcp`) backed directly by live BigQuery APIs and official HTTP Archive documentation.
+
+---
+
+## Zero-Configuration Remote Architecture
+
+Clients require **no local GCP credentials**, **no local BigQuery SDK installations**, and **no local background processes**. The plugin connects directly to HTTP Archive's cloud endpoint over Streamable HTTP:
+
+```mermaid
+graph LR
+    Agent[AI Agent / IDE] -->|mcp.json: Streamable HTTP| CDN["https://cdn.httparchive.org/mcp<br/>(Cloud Run Behind CDN)"]
+    CDN -->|Live Metadata| BQ[(Google BigQuery<br/>httparchive.crawl.*)]
+    CDN -->|Live Markdown| Docs[HTTP Archive Docs Repo]
+```
 
 ---
 
 ## Capabilities
 
-### 1. Model Context Protocol (MCP) Tools
-The plugin includes a stdio MCP server exposing 5 tools for BigQuery live introspection and cost validation:
+### 1. Remote Model Context Protocol (MCP) Tools
+The remote endpoint (`https://cdn.httparchive.org/mcp`) exposes 5 live introspection and cost validation tools:
 
 | Tool | Source of Truth | Description | Cost |
 |---|---|---|---|
@@ -44,60 +57,36 @@ Located under `skills/` adhering to the [Agent Skills specification](https://age
 ```text
 httparchive-plugin/
 ├── plugin.json                              # Agent Plugins v1.0.0 root manifest
-├── mcp.json                                 # MCP stdio server configuration
-├── bin/
-│   └── server.js                            # MCP server CLI executable
-├── src/
-│   ├── index.js                             # McpServer initialization & tool registrations
-│   ├── bigquery.js                          # Live BigQuery client factory
-│   ├── docs.js                              # Dynamic HTTP Archive documentation loader
-│   └── tools/
-│       ├── get_table_schema.js              # Live BQ metadata + docs loader
-│       ├── list_custom_metrics.js           # Live BQ custom_metrics schema & sampling
-│       ├── preview_table_rows.js            # Live BQ Tabledata preview ($0.00)
-│       ├── analyze_query_cost.js            # Live BQ dry-run & domain cost linter
-│       └── get_documentation.js             # Live docs reader
+├── mcp.json                                 # Remote Streamable HTTP MCP configuration
 ├── skills/
 │   ├── httparchive-table-schema/
 │   │   └── SKILL.md                         # Live schema exploration guide
 │   └── httparchive-cost-optimization/
 │       └── SKILL.md                         # Cost minimization playbook
 ├── tests/
-│   ├── cost_linter.test.js                  # Unit tests for cost linting rules
-│   └── mcp_tools.test.js                    # Unit tests for MCP server tools
+│   └── plugin.test.js                       # Manifest, skills, & MCP endpoint tests
 ├── scripts/
 │   ├── validate-spec.js                     # Validates plugin against agent-plugins.org schemas
 │   └── schemas/1.0.0/                       # Canonical Agent Plugins JSON schemas
 └── .github/workflows/
-    └── ci.yml                               # CI matrix (Node 20, 22, 24)
+    └── ci.yml                               # GitHub Actions CI workflow
 ```
 
 ---
 
-## Installation & Usage
+## Installation & Configuration
 
-### Prerequisites
-1. **Node.js**: >= 20.0.0
-2. **Google Cloud Credentials**: Active Application Default Credentials (ADC) with access to BigQuery:
-   ```bash
-   gcloud auth application-default login
-   ```
+### In Any Agent Plugins Compatible Client (Cursor, Claude Desktop, Antigravity, Jules)
 
-### Running with AI Agent Clients
-
-#### In Any Agent Plugins Compatible Client (Cursor, Claude Desktop, Antigravity)
-Add the plugin directory to your agent's plugin discovery path or configure `mcp.json`:
+Add the plugin directory to your agent's plugin discovery path or include `mcp.json` in your client configuration:
 
 ```json
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
     "httparchive": {
-      "command": "node",
-      "args": ["/path/to/httparchive-plugin/bin/server.js"],
-      "env": {
-        "BIGQUERY_PROJECT": "httparchive",
-        "BIGQUERY_LOCATION": "US"
-      }
+      "type": "streamable-http",
+      "url": "https://cdn.httparchive.org/mcp"
     }
   }
 }
@@ -108,7 +97,7 @@ Add the plugin directory to your agent's plugin discovery path or configure `mcp
 ## Development & Testing
 
 ```bash
-# Install dependencies
+# Install test/lint dependencies
 npm install
 
 # Run unit tests

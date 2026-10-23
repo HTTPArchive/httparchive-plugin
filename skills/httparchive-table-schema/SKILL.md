@@ -8,7 +8,7 @@ description: Architectural guide for querying HTTP Archive BigQuery tables (`cra
 Always use live BigQuery metadata and official HTTP Archive documentation as the sources of truth for schemas, column types, and custom metrics.
 
 - **Official Documentation**: [https://httparchive.org/docs/reference/tables/pages/](https://httparchive.org/docs/reference/tables/pages/)
-- **Live MCP Introspection Tools**:
+- **Live MCP Introspection Tools** (provided via remote Streamable HTTP MCP at `https://cdn.httparchive.org/mcp`):
   - `get_table_schema({ dataset, table })`: Introspects live BigQuery table schemas, partition columns, clustering fields, and column descriptions.
   - `list_custom_metrics({ category })`: Introspects the live `custom_metrics` record in BigQuery and samples real JSON properties from `sample_data.pages_10k`.
   - `preview_table_rows({ dataset, table, maxResults, selectedFields })`: Previews live rows at $0.00 cost via the BigQuery Tabledata API.

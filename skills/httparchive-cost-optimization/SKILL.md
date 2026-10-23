@@ -8,7 +8,7 @@ description: Practical execution playbook for minimizing BigQuery query costs on
 HTTP Archive tables contain hundreds of terabytes of data. BigQuery on-demand pricing is $6.25 per TB scanned.
 
 - **Authoritative Guide**: [https://httparchive.org/docs/guides/minimizing-costs/](https://httparchive.org/docs/guides/minimizing-costs/) (read via `get_documentation({ topic: "minimizing-costs" })`).
-- **Live Dry-Run Tool**: `analyze_query_cost({ query })` calculates exact bytes processed, estimated USD cost, and checks for partition and clustering violations.
+- **Live Dry-Run Tool** (provided via remote Streamable HTTP MCP at `https://cdn.httparchive.org/mcp`): `analyze_query_cost({ query })` calculates exact bytes processed, estimated USD cost, and checks for partition and clustering violations.
 
 ---
 

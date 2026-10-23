@@ -1,17 +1,12 @@
 {
   "name": "@httparchive/agent-plugin",
   "version": "1.0.0",
-  "description": "HTTP Archive agent plugin for table schema exploration and query cost optimization",
+  "description": "HTTP Archive agent plugin for table schema exploration and query cost optimization via remote MCP",
   "type": "module",
-  "main": "src/index.js",
-  "bin": {
-    "httparchive-mcp": "./bin/server.js"
-  },
   "engines": {
     "node": ">=20.0.0"
   },
   "scripts": {
-    "start": "node ./bin/server.js",
     "test": "node --test tests/*.test.js",
     "validate:spec": "node scripts/validate-spec.js",
     "lint": "eslint ."
@@ -23,6 +18,7 @@
   "keywords": [
     "agent-plugin",
     "mcp",
+    "streamable-http",
     "model-context-protocol",
     "httparchive",
     "bigquery",
@@ -35,11 +31,6 @@
     "url": "https://github.com/httparchive/httparchive-plugin/issues"
   },
   "homepage": "https://httparchive.org",
-  "dependencies": {
-    "@google-cloud/bigquery": "^7.9.2",
-    "@modelcontextprotocol/sdk": "^1.6.0",
-    "zod": "^3.24.2"
-  },
   "devDependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
