@@ -1,7 +1,7 @@
 {
   "name": "@httparchive/agent-plugin",
   "version": "1.0.0",
-  "description": "HTTP Archive agent plugin for table schema exploration and query cost optimization via remote MCP",
+  "description": "HTTP Archive agent plugin for table schema exploration and query cost optimization via agent skills",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -17,9 +17,8 @@
   },
   "keywords": [
     "agent-plugin",
-    "mcp",
-    "streamable-http",
-    "model-context-protocol",
+    "skills",
+    "cli-first",
     "httparchive",
     "bigquery",
     "cost-optimization",

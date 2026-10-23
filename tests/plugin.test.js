@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 
-test('Plugin Manifest (plugin.json): conforms to expected structure', () => {
+test('Plugin Manifest (plugin.json): conforms to agent-plugins.org v1.0.0', () => {
   const pluginPath = path.join(rootDir, 'plugin.json');
   assert.ok(fs.existsSync(pluginPath), 'plugin.json should exist');
 
@@ -18,24 +18,17 @@ test('Plugin Manifest (plugin.json): conforms to expected structure', () => {
   assert.equal(plugin.license, 'Apache-2.0');
   assert.ok(Array.isArray(plugin.keywords));
   assert.ok(plugin.keywords.includes('httparchive'));
+  assert.ok(plugin.keywords.includes('skills'));
 });
 
-test('MCP Config (mcp.json): configured for remote streamable-http', () => {
+test('Plugin Architecture: pure skills configuration without MCP token bloat', () => {
   const mcpPath = path.join(rootDir, 'mcp.json');
-  assert.ok(fs.existsSync(mcpPath), 'mcp.json should exist');
-
-  const mcp = JSON.parse(fs.readFileSync(mcpPath, 'utf-8'));
-  assert.ok(mcp.mcpServers, 'mcpServers object must exist');
-  assert.ok(mcp.mcpServers.httparchive, 'httparchive server definition must exist');
-
-  const serverConfig = mcp.mcpServers.httparchive;
-  assert.equal(serverConfig.type, 'streamable-http', 'Server type must be streamable-http');
-  assert.equal(serverConfig.url, 'https://cdn.httparchive.org/mcp', 'Must point to production remote MCP endpoint');
+  assert.equal(fs.existsSync(mcpPath), false, 'mcp.json should not exist in pure skills plugin');
 });
 
-test('Skills: both table-schema and cost-optimization skills are defined with valid frontmatter', () => {
+test('Skills: both docs-and-metrics and query-optimizer skills are defined with valid frontmatter', () => {
   const skillsDir = path.join(rootDir, 'skills');
-  const requiredSkills = ['httparchive-table-schema', 'httparchive-cost-optimization'];
+  const requiredSkills = ['httparchive-docs-and-metrics', 'httparchive-query-optimizer'];
 
   for (const skill of requiredSkills) {
     const skillPath = path.join(skillsDir, skill, 'SKILL.md');
@@ -52,16 +45,15 @@ test('Skills: both table-schema and cost-optimization skills are defined with va
   }
 });
 
-test('Remote MCP Server: https://cdn.httparchive.org/mcp endpoint is live and responsive', async () => {
+test('Official Documentation: GitHub raw documentation source is accessible', async () => {
   try {
-    const res = await fetch('https://cdn.httparchive.org/mcp', {
-      method: 'OPTIONS',
-    });
-    assert.ok(res.ok, 'Remote MCP server should respond with 2xx to OPTIONS');
-    const allowHeaders = res.headers.get('access-control-allow-headers');
-    assert.ok(allowHeaders && allowHeaders.includes('mcp-protocol-version'), 'Should support MCP protocol version headers');
+    const res = await fetch(
+      'https://raw.githubusercontent.com/HTTPArchive/httparchive.org/main/src/content/docs/docs/guides/minimizing-costs.md'
+    );
+    assert.ok(res.ok, 'Documentation endpoint should return 200 OK');
+    const text = await res.text();
+    assert.ok(text.includes('Minimizing query costs') || text.includes('TABLESAMPLE'));
   } catch (err) {
-    // If offline or network constrained in test runner, pass with note
     console.warn('Network check skipped or offline:', err.message);
   }
 });

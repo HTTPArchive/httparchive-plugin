@@ -32,15 +32,20 @@ if (!pluginValid) {
   console.log('✅ plugin.json is conformant with agent-plugins.org v1.0.0 spec.');
 }
 
-// 2. Validate mcp.json
-console.log('Validating mcp.json...');
-const mcpData = JSON.parse(fs.readFileSync(path.join(rootDir, 'mcp.json'), 'utf-8'));
-const mcpValid = validateMcp(mcpData);
-if (!mcpValid) {
-  console.error('❌ mcp.json validation failed:', validateMcp.errors);
-  hasErrors = true;
+// 2. Validate mcp.json (optional for pure skills plugins)
+const mcpPath = path.join(rootDir, 'mcp.json');
+if (fs.existsSync(mcpPath)) {
+  console.log('Validating mcp.json...');
+  const mcpData = JSON.parse(fs.readFileSync(mcpPath, 'utf-8'));
+  const mcpValid = validateMcp(mcpData);
+  if (!mcpValid) {
+    console.error('❌ mcp.json validation failed:', validateMcp.errors);
+    hasErrors = true;
+  } else {
+    console.log('✅ mcp.json is conformant with agent-plugins.org v1.0.0 spec.');
+  }
 } else {
-  console.log('✅ mcp.json is conformant with agent-plugins.org v1.0.0 spec.');
+  console.log('ℹ️ No mcp.json present — pure skills plugin configuration.');
 }
 
 // 3. Validate skills/

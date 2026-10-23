@@ -4,51 +4,65 @@
 [![Agent Plugins](https://img.shields.io/badge/Agent_Plugins-v1.0.0-blue.svg)](https://agent-plugins.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-An official agent plugin conforming to the [Agent Plugins Specification (v1.0.0)](https://agent-plugins.org/) for querying the [HTTP Archive](https://httparchive.org) dataset in Google Cloud BigQuery.
-
-Instead of bundling local scripts or static catalogs that become outdated quickly, this plugin connects to HTTP Archive's production **remote Streamable HTTP MCP server** (`https://cdn.httparchive.org/mcp`) backed directly by live BigQuery APIs and official HTTP Archive documentation.
+An official, CLI-first agent plugin conforming to the [Agent Plugins Specification (v1.0.0)](https://agent-plugins.org/) for querying the [HTTP Archive](https://httparchive.org) dataset in Google Cloud BigQuery.
 
 ---
 
-## Zero-Configuration Remote Architecture
+## Why Pure Skills?
 
-Clients require **no local GCP credentials**, **no local BigQuery SDK installations**, and **no local background processes**. The plugin connects directly to HTTP Archive's cloud endpoint over Streamable HTTP:
+Instead of running a local MCP server or forcing a remote MCP dependency that incurs continuous schema token bloat and maintenance overhead, this plugin provides **two high-leverage agent skills**:
 
-```mermaid
-graph LR
-    Agent[AI Agent / IDE] -->|mcp.json: Streamable HTTP| CDN["https://cdn.httparchive.org/mcp<br/>(Cloud Run Behind CDN)"]
-    CDN -->|Live Metadata| BQ[(Google BigQuery<br/>httparchive.crawl.*)]
-    CDN -->|Live Markdown| Docs[HTTP Archive Docs Repo]
-```
+1. **Zero System Prompt Bloat**: MCP tools inject JSON Schemas into the agent context on *every single interaction*. Skills are loaded on demand only when relevant to the task.
+2. **CLI-First Flexibility**: AI agents can run native commands (`bq`, `curl`, `jq`), pipe outputs, and inspect specific properties without being locked into rigid tool signatures.
+3. **Always Up to Date**: Agents query BigQuery's live `INFORMATION_SCHEMA` and fetch official documentation directly from GitHub, ensuring schemas and metrics never get stale.
+4. **Zero Maintenance & Downtime**: No servers, no local background processes, and no external runtime dependencies.
 
 ---
 
-## Capabilities
+## Included Skills
 
-### 1. Remote Model Context Protocol (MCP) Tools
-The remote endpoint (`https://cdn.httparchive.org/mcp`) exposes 5 live introspection and cost validation tools:
+### 1. [`httparchive-docs-and-metrics`](skills/httparchive-docs-and-metrics/SKILL.md)
+Retrieval guide for official HTTP Archive documentation and live introspection of `custom_metrics` JSON sub-columns in BigQuery.
 
-| Tool | Source of Truth | Description | Cost |
-|---|---|---|---|
-| `get_table_schema` | **Live BigQuery API + Docs** | Queries BigQuery table metadata directly for column types, partitioning (`date`), clustering hierarchy, and links to official documentation. | $0.00 |
-| `list_custom_metrics` | **Live BigQuery Schema & Data** | Introspects the live `custom_metrics` RECORD in BigQuery `crawl.pages`, and samples real JSON property keys via `sample_data.pages_10k` Tabledata API. | $0.00 |
-| `preview_table_rows` | **Live BigQuery Tabledata API** | Previews actual live rows at zero cost without executing query jobs or scanning bytes. | $0.00 |
-| `analyze_query_cost` | **Live BigQuery Dry-Run API** | Runs a live BigQuery dry-run (`dryRun: true`) returning exact bytes processed, estimated USD cost, and applies domain cost rules (partitioning, clustering order, `SELECT *` traps, `LIMIT` traps). | $0.00 |
-| `get_documentation` | **HTTP Archive Docs Source** | Dynamically fetches official documentation guides (`minimizing-costs`, `getting-started`, `release-cycle`), table reference docs (`pages`, `requests`), struct reference docs (`custom-metrics`, `technology`), and SQL function docs (`capo`, `get_origin`). | $0.00 |
+- **Live Documentation Fetching**: Instructions and paths to read authoritative guides (`minimizing-costs.md`, `getting-started.md`, `release-cycle.md`), table references (`pages.md`, `requests.md`), and UDFs (`capo.md`, `get_origin.md`) directly from GitHub:
+  ```bash
+  curl -sL "https://raw.githubusercontent.com/HTTPArchive/httparchive.org/main/src/content/docs/docs/guides/minimizing-costs.md"
+  ```
+- **Live `custom_metrics` Discovery ($0.00)**: Discover all active categories from BigQuery's metadata catalog:
+  ```bash
+  bq query --use_legacy_sql=false --format=prettyjson \
+  "SELECT field_path, data_type 
+  FROM \`httparchive.crawl.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS\` 
+  WHERE table_name = 'pages' AND column_name = 'custom_metrics'"
+  ```
+- **Key Sampling from `sample_data`**: Sample real JSON property keys via `JSON_KEYS()` on `sample_data.pages_10k`.
+- **Capacitor Storage Rules**: Why dot-notation (`custom_metrics.a11y`) only scans ~10 MB, while selecting root `custom_metrics` scans >350 MB.
 
-### 2. Agent Skills
-Located under `skills/` adhering to the [Agent Skills specification](https://agentskills.io/):
+---
 
-- **[`httparchive-table-schema`](skills/httparchive-table-schema/SKILL.md)**:
-  - Guides agents to use `get_table_schema`, `list_custom_metrics`, and `get_documentation` to discover live structures rather than guessing.
-  - Unnesting patterns for `technologies` (`ARRAY<STRUCT>`) and `features` (`ARRAY<STRUCT>`).
-  - Structured `RECORD` column storage for `custom_metrics` vs internal `JSON` path extraction.
-  - Safe join patterns between pages and requests.
-- **[`httparchive-cost-optimization`](skills/httparchive-cost-optimization/SKILL.md)**:
-  - Grounded in the official [Minimizing Costs Guide](https://httparchive.org/docs/guides/minimizing-costs/).
-  - The 5 core optimization rules (mandatory `date` partition, clustering hierarchy, column projection hygiene, the `LIMIT` trap).
-  - Explains the BigQuery dry-run estimation limitation on clustered `rank` filters.
-  - The 5-step safe prototyping progression (`preview_table_rows` → `sample_data.pages_10k` → `TABLESAMPLE` → clustered slice → production run).
+### 2. [`httparchive-query-optimizer`](skills/httparchive-query-optimizer/SKILL.md)
+Execution playbook for inspecting table schemas, previewing table data at $0.00 cost, running dry-run cost checks, and writing high-efficiency BigQuery SQL.
+
+- **Live Schema Introspection**:
+  ```bash
+  bq show --schema --format=prettyjson httparchive:crawl.pages
+  ```
+- **Zero-Cost Tabledata Previews**: How to use `bq head` to inspect live data at $0.00 cost without executing query jobs (avoiding the `SELECT ... LIMIT 1` trap):
+  ```bash
+  bq head -n 5 --format=prettyjson --selected_fields="date,client,page,rank" httparchive:sample_data.pages_10k
+  ```
+- **Dry-Run Cost Checks**:
+  ```bash
+  bq query --use_legacy_sql=false --dry_run "SELECT ..."
+  ```
+- **The 5 Core Optimization Rules**:
+  1. Mandatory `date` partition pruning (`WHERE date = 'YYYY-MM-01'`).
+  2. Follow clustering order left-to-right (`client` → `is_root_page` → `rank` → `page`).
+  3. **The Dry-Run Estimation Trap on `rank`**: Explains why dry-run estimates for `rank <= 1000` overestimate actual scan costs, and how to safely prototype on `sample_data.pages_10k` or `TABLESAMPLE`.
+  4. Projection hygiene (no `SELECT *`, dot-notate `custom_metrics`).
+  5. Safe joins between `crawl.pages` and `crawl.requests` (repeating partition and clustering filters on both sides).
+- **The 5-Step Safe Prototyping Ladder**:
+  `bq head` ($0.00) → `sample_data.pages_10k` (<100 MB) → `TABLESAMPLE SYSTEM (0.01 PERCENT)` → Clustered slice (`rank <= 1000`) → Dry-run before production run.
 
 ---
 
@@ -57,14 +71,13 @@ Located under `skills/` adhering to the [Agent Skills specification](https://age
 ```text
 httparchive-plugin/
 ├── plugin.json                              # Agent Plugins v1.0.0 root manifest
-├── mcp.json                                 # Remote Streamable HTTP MCP configuration
 ├── skills/
-│   ├── httparchive-table-schema/
-│   │   └── SKILL.md                         # Live schema exploration guide
-│   └── httparchive-cost-optimization/
-│       └── SKILL.md                         # Cost minimization playbook
+│   ├── httparchive-docs-and-metrics/
+│   │   └── SKILL.md                         # Documentation & custom metrics skill
+│   └── httparchive-query-optimizer/
+│       └── SKILL.md                         # Query optimization & schema skill
 ├── tests/
-│   └── plugin.test.js                       # Manifest, skills, & MCP endpoint tests
+│   └── plugin.test.js                       # Specification & skill verification tests
 ├── scripts/
 │   ├── validate-spec.js                     # Validates plugin against agent-plugins.org schemas
 │   └── schemas/1.0.0/                       # Canonical Agent Plugins JSON schemas
@@ -74,36 +87,28 @@ httparchive-plugin/
 
 ---
 
-## Installation & Configuration
+## Installation & Usage
 
-### In Any Agent Plugins Compatible Client (Cursor, Claude Desktop, Antigravity, Jules)
+Add the plugin to your agent's skills or plugins discovery directory:
 
-Add the plugin directory to your agent's plugin discovery path or include `mcp.json` in your client configuration:
-
-```json
-{
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
-  "mcpServers": {
-    "httparchive": {
-      "type": "streamable-http",
-      "url": "https://cdn.httparchive.org/mcp"
-    }
-  }
-}
+```bash
+git clone https://github.com/httparchive/httparchive-plugin.git
 ```
+
+In any Agent Plugins v1.0.0 compatible harness (such as Antigravity, Cursor, Claude Code, or Jules), the skills will be automatically discovered and activated when exploring HTTP Archive tables or writing queries.
 
 ---
 
-## Development & Testing
+## Testing & Validation
 
 ```bash
-# Install test/lint dependencies
+# Install test dependencies
 npm install
 
 # Run unit tests
 npm test
 
-# Run Agent Plugins specification validator
+# Validate Agent Plugins specification conformance
 npm run validate:spec
 
 # Run linter
